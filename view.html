@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liste</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-clipboard-list"></i> <span id="listTitleDisplay">ANONİM LİSTE</span></h1>
+            <p id="listIdDisplay">Liste ID: <span id="listId"></span></p>
+        </header>
+
+        <div id="editControls">
+            <div class="list-controls">
+                <input type="text" id="itemName" placeholder="Öğe adı">
+                <input type="text" id="itemAmount" placeholder="Miktar">
+                <input type="text" id="itemImageUrl" placeholder="Görsel URL (isteğe bağlı)">
+                <button onclick="addItem()"><i class="fas fa-plus"></i> Ekle</button>
+            </div>
+        </div>
+
+        <div class="list-container">
+            <div class="list-header">
+                <div class="header-name">Öğe</div>
+                <div class="header-amount">Miktar</div>
+            </div>
+
+            <div class="list-items" id="itemsList">
+                <!-- Öğeler buraya eklenecek -->
+            </div>
+        </div>
+
+        <div class="actions">
+            <button onclick="window.location.href='index.html'" class="secondary">
+                <i class="fas fa-plus"></i> Yeni Liste Oluştur
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Config (index.html ile aynı olmalı)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCGG5Ur3YpVxbtkjooMxE6r7RPuAmZoFRI",
+            authDomain: "anonim-not.firebaseapp.com",
+            projectId: "anonim-not",
+            storageBucket: "anonim-not.appspot.com",
+            messagingSenderId: "1020793266706",
+            appId: "1:1020793266706:web:bdaba147c8367a50dfaecb"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let currentListId = '';
+        let currentItems = [];
+        let hasEditPermission = false;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentListId = urlParams.get("id");
+            const password = urlParams.get("p");
+            
+            document.getElementById("listId").textContent = currentListId;
+            
+            if (password) {
+                db.collection("lists").doc(currentListId).get()
+                    .then(doc => {
+                        if (doc.exists) {
+                            document.getElementById("listTitleDisplay").textContent = doc.data().title || "İsimsiz Liste";
+                            
+                            if (doc.data().password === password) {
+                                hasEditPermission = true;
+                                document.getElementById("editControls").style.display = 'block';
+                            } else {
+                                document.getElementById("editControls").style.display = 'none';
+                            }
+                            loadList();
+                        }
+                    });
+            } else {
+                document.getElementById("editControls").style.display = 'none';
+                db.collection("lists").doc(currentListId).get()
+                    .then(doc => {
+                        if (doc.exists) {
+                            document.getElementById("listTitleDisplay").textContent = doc.data().title || "İsimsiz Liste";
+                            loadList();
+                        }
+                    });
+            }
+        });
+
+        function loadList() {
+            db.collection("lists").doc(currentListId).onSnapshot((doc) => {
+                if (doc.exists) {
+                    currentItems = doc.data().items || [];
+                    renderItems();
+                }
+            });
+        }
+
+        function addItem() {
+            if (!hasEditPermission) return alert("Düzenleme izniniz yok!");
+            
+            const name = document.getElementById("itemName").value;
+            const amount = document.getElementById("itemAmount").value || "1";
+            const imageUrl = document.getElementById("itemImageUrl").value;
+
+            if (!name) return alert("Lütfen öğe adı girin!");
+
+            const newItem = { name, amount, imageUrl: imageUrl || null };
+            const updatedItems = [...currentItems, newItem];
+            
+            db.collection("lists").doc(currentListId).update({
+                items: updatedItems
+            }).then(() => {
+                document.getElementById("itemName").value = "";
+                document.getElementById("itemAmount").value = "";
+                document.getElementById("itemImageUrl").value = "";
+            });
+        }
+
+        function removeItem(index) {
+            if (!hasEditPermission) return alert("Düzenleme izniniz yok!");
+            
+            const updatedItems = [...currentItems];
+            updatedItems.splice(index, 1);
+            
+            db.collection("lists").doc(currentListId).update({
+                items: updatedItems
+            });
+        }
+
+        function renderItems() {
+            const container = document.getElementById("itemsList");
+            container.innerHTML = '';
+
+            if (currentItems.length === 0) {
+                container.innerHTML = "<div class='empty'>Liste boş!</div>";
+                return;
+            }
+
+            currentItems.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                
+                let imageHtml = '';
+                if (item.imageUrl) {
+                    imageHtml = `<div class="item-image-container">
+                        <img src="${item.imageUrl}" class="item-image" onerror="this.style.display='none'">
+                    </div>`;
+                }
+                
+                div.innerHTML = `
+                    ${imageHtml}
+                    <div class="item-details">
+                        <div class="item-name">${item.name}</div>
+                        <div class="item-amount">${item.amount}</div>
+                    </div>
+                    ${hasEditPermission ? 
+                        `<button onclick="removeItem(${index})" class="remove-btn">
+                            <i class="fas fa-trash"></i>
+                        </button>` : ''
+                    }
+                `;
+                container.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>
